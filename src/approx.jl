@@ -185,6 +185,52 @@ function approximate(
             )
             a.fc[λ] = GroupedCoefficients(a.trafo.setting, tmp)
         end
+    elseif solver == "krr" # kernel ridge regression, todo: solver 'svm'?
+        if a.basis == "per"
+            matrixfun = LinearMap{ComplexF64}(
+                v -> regkernel(v,a.trafo,a.U,w,λ),size(a.X)[2]
+            )
+            alpha = cg( # todo return the alphas -> GroupedTransforms
+                matrixfun,
+                a.y,
+                maxiter = max_iter,
+                verbose = verbose,
+            )
+            coeff = a.trafo' * alpha
+            global k = 1
+            for u in a.U
+                if u == []
+                    coeff[u] = w[k:k].^(-1) .* coeff[u]
+                    k = k + 1
+                else
+                    coeff[u] = w[k:k+length(coeff[u])-1].^(-1) .* coeff[u]
+                    k = k + length(coeff[u])
+                end
+            end
+            a.fc[λ] = GroupedCoefficients(a.trafo.setting, vec(coeff))
+        else
+            matrixfun = LinearMap{Float64}(
+                v -> regkernel(v,a.trafo,a.U,w,λ),size(a.X)[2]
+            )
+            alpha = cg( # TODO return the alphas -> GroupedTransforms
+                matrixfun,
+                a.y,
+                maxiter = max_iter,
+                verbose = verbose,
+            )
+            coeff = a.trafo' * alpha
+            global k = 1
+            for u in a.U
+                if u == []
+                    coeff[u] = w[k:k].^(-1) .* coeff[u]
+                    k = k + 1
+                else
+                    coeff[u] = w[k:k+length(coeff[u])-1].^(-1) .* coeff[u]
+                    k = k + length(coeff[u])
+                end
+            end
+            a.fc[λ] = GroupedCoefficients(a.trafo.setting, vec(coeff))
+        end
     elseif solver == "fista"
         ghat = GroupedCoefficients(a.trafo.setting, tmp)
         fista!(ghat, a.trafo, a.y, λ, what, max_iter = max_iter)

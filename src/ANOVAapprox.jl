@@ -53,5 +53,6 @@ include("fista.jl")
 include("approx.jl")
 include("errors.jl")
 include("analysis.jl")
+include("krr.jl")
 
 end # module

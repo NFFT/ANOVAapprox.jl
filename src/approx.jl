@@ -149,6 +149,7 @@ function approximate(
     nf = get_NumFreq(a.trafo.setting)
 
     w = ones(Float64, nf)
+    nw = ones(Float64, length(a.y))
 
     if !isnothing(weights)
         if (length(weights) != nf) || (minimum(weights) < 1)
@@ -158,11 +159,11 @@ function approximate(
         end
     end
 
-    if !isnothing(weights)
-        if (length(weights) != nf) || (minimum(weights) < 1)
-            error("Weight requirements not fulfilled.")
+    if !isnothing(nodeweights)
+        if (length(nodeweights) != length(a.y))
+            error("The length of the nodeweights Vector doesnt match the Data.")
         else
-            w = weights
+            nw = nodeweights
         end
     end
 
@@ -185,10 +186,10 @@ function approximate(
         if a.basis == "per"
             F_vec = LinearMap{ComplexF64}(
                 fhat -> vcat(
-                    a.trafo * GroupedCoefficients(a.trafo.setting, fhat),
+                    sqrt.(nw).*(a.trafo * GroupedCoefficients(a.trafo.setting, fhat)),
                     diag_w_sqrt .* fhat,
                 ),
-                f -> vec(a.trafo' * f[1:M]) + diag_w_sqrt .* f[M+1:end],
+                f -> vec(a.trafo' * (sqrt.(nw).*f[1:M])) + diag_w_sqrt .* f[M+1:end],
                 M + nf,
                 nf,
             )

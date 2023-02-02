@@ -196,7 +196,7 @@ function approximate(
             lsqr!(
                 tmp,
                 F_vec,
-                vcat(a.y, zeros(ComplexF64, nf)),
+                vcat(sqrt.(nw).*a.y, zeros(ComplexF64, nf)),
                 maxiter = max_iter,
                 verbose = verbose,
                 atol = tol,

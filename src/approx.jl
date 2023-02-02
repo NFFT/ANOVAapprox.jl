@@ -143,11 +143,20 @@ function approximate(
     verbose::Bool = false,
     solver::String = "lsqr",
     tol::Float64 = 1e-8,
+    nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Nothing
     M = size(a.X, 2)
     nf = get_NumFreq(a.trafo.setting)
 
     w = ones(Float64, nf)
+
+    if !isnothing(weights)
+        if (length(weights) != nf) || (minimum(weights) < 1)
+            error("Weight requirements not fulfilled.")
+        else
+            w = weights
+        end
+    end
 
     if !isnothing(weights)
         if (length(weights) != nf) || (minimum(weights) < 1)

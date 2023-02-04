@@ -206,17 +206,17 @@ function approximate(
         else
             F_vec = LinearMap{Float64}(
                 fhat -> vcat(
-                    a.trafo * GroupedCoefficients(a.trafo.setting, fhat),
+                    sqrt.(nw).*(a.trafo * GroupedCoefficients(a.trafo.setting, fhat)),
                     diag_w_sqrt .* fhat,
                 ),
-                f -> vec(a.trafo' * f[1:M]) + diag_w_sqrt .* f[M+1:end],
+                f -> vec(a.trafo' * (sqrt.(nw).*f[1:M])) + diag_w_sqrt .* f[M+1:end],
                 M + nf,
                 nf,
             )
             lsqr!(
                 tmp,
                 F_vec,
-                vcat(a.y, zeros(Float64, nf)),
+                vcat(sqrt.(nw).*a.y, zeros(Float64, nf)),
                 maxiter = max_iter,
                 verbose = verbose,
                 atol = tol,

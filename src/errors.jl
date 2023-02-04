@@ -50,9 +50,19 @@ end
 
 This function computes the mean square error (mse) on the training nodes for regularization parameter `λ`.
 """
-function get_mse(a::approx, λ::Float64)::Float64
+function get_mse(a::approx, λ::Float64,nodeweights::Union{Vector{Float64},Nothing} = nothing,)::Float64
     y_eval = evaluate(a, λ)
-    return 1 / length(a.y) * (norm(y_eval - a.y)^2)
+
+    nw = ones(Float64, length(a.y))
+    if !isnothing(nodeweights)
+        if (length(nodeweights) != length(a.y))
+            error("The length of the nodeweights Vector doesnt match the Data.")
+        else
+            nw = nodeweights
+        end
+    end
+
+    return 1 / length(a.y) * (norm(sqrt.(nw).*y_eval - sqrt.(nw).*a.y)^2)
 end
 
 @doc raw"""
@@ -65,9 +75,20 @@ function get_mse(
     X::Matrix{Float64},
     y::Union{Vector{ComplexF64},Vector{Float64}},
     λ::Float64,
+    nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Float64
+
+    nw = ones(Float64, length(y))
+    if !isnothing(nodeweights)
+        if (length(nodeweights) != length(y))
+            error("The length of the nodeweights Vector doesnt match the Data.")
+        else
+            nw = nodeweights
+        end
+    end
+
     y_eval = evaluate(a, X, λ)
-    return 1 / length(y) * (norm(y_eval - y)^2)
+    return 1 / length(y) * (norm(sqrt.(nw).*y_eval - sqrt.(nw).*y)^2)
 end
 
 @doc raw"""
@@ -75,8 +96,8 @@ end
 
 This function computes the mean square error (mse) on the training nodes for all regularization parameters.
 """
-function get_mse(a::approx)::Dict{Float64,Float64}
-    return Dict(λ => get_mse(a, λ) for λ in collect(keys(a.fc)))
+function get_mse(a::approx,args...,)::Dict{Float64,Float64}
+    return Dict(λ => get_mse(a, λ; args...) for λ in collect(keys(a.fc)))
 end
 
 @doc raw"""

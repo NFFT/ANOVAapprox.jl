@@ -96,8 +96,8 @@ end
 
 This function computes the mean square error (mse) on the training nodes for all regularization parameters.
 """
-function get_mse(a::approx,args...,)::Dict{Float64,Float64}
-    return Dict(λ => get_mse(a, λ; args...) for λ in collect(keys(a.fc)))
+function get_mse(a::approx,nodeweights::Union{Vector{Float64},Nothing} = nothing,)::Dict{Float64,Float64}
+    return Dict(λ => get_mse(a, λ, nodeweights) for λ in collect(keys(a.fc)))
 end
 
 @doc raw"""

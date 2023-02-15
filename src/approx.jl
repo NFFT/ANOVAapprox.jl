@@ -186,17 +186,17 @@ function approximate(
         if a.basis == "per"
             F_vec = LinearMap{ComplexF64}(
                 fhat -> vcat(
-                    sqrt.(nw).*(a.trafo * GroupedCoefficients(a.trafo.setting, fhat)),
+                    nw.*(a.trafo * GroupedCoefficients(a.trafo.setting, fhat)),
                     diag_w_sqrt .* fhat,
                 ),
-                f -> vec(a.trafo' * (sqrt.(nw).*f[1:M])) + diag_w_sqrt .* f[M+1:end],
+                f -> vec(a.trafo' * (nw.*f[1:M])) + diag_w_sqrt .* f[M+1:end],
                 M + nf,
                 nf,
             )
             lsqr!(
                 tmp,
                 F_vec,
-                vcat(sqrt.(nw).*a.y, zeros(ComplexF64, nf)),
+                vcat(a.y, zeros(ComplexF64, nf)),
                 maxiter = max_iter,
                 verbose = verbose,
                 atol = tol,
@@ -206,17 +206,17 @@ function approximate(
         else
             F_vec = LinearMap{Float64}(
                 fhat -> vcat(
-                    sqrt.(nw).*(a.trafo * GroupedCoefficients(a.trafo.setting, fhat)),
+                    nw.*(a.trafo * GroupedCoefficients(a.trafo.setting, fhat)),
                     diag_w_sqrt .* fhat,
                 ),
-                f -> vec(a.trafo' * (sqrt.(nw).*f[1:M])) + diag_w_sqrt .* f[M+1:end],
+                f -> vec(a.trafo' * (nw.*f[1:M])) + diag_w_sqrt .* f[M+1:end],
                 M + nf,
                 nf,
             )
             lsqr!(
                 tmp,
                 F_vec,
-                vcat(sqrt.(nw).*a.y, zeros(Float64, nf)),
+                vcat(a.y, zeros(Float64, nf)),
                 maxiter = max_iter,
                 verbose = verbose,
                 atol = tol,
@@ -261,7 +261,19 @@ function evaluate(
     a::approx,
     X::Matrix{Float64},
     λ::Float64,
+    nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Union{Vector{ComplexF64},Vector{Float64}}
+
+    nw = ones(Float64, length(a.y))
+
+    if !isnothing(nodeweights)
+        if (length(nodeweights) != length(a.y))
+            error("The length of the nodeweights Vector doesnt match the Data.")
+        else
+            nw = nodeweights
+        end
+    end
+
     basis = a.basis
 
     if (basis == "per") && ((minimum(X) < -0.5) || (maximum(X) >= 0.5))
@@ -287,7 +299,7 @@ function evaluate(
     end
 
     trafo = GroupedTransform(gt_systems[basis], a.U, a.N, Xt, a.dcos)
-    return trafo * a.fc[λ]
+    return nw.*(trafo * a.fc[λ])
 end
 
 @doc raw"""
@@ -295,8 +307,17 @@ end
 
 This function evaluates the approximation on the nodes `a.X` for the regularization parameter `λ`.
 """
-function evaluate(a::approx, λ::Float64)::Union{Vector{ComplexF64},Vector{Float64}}
-    return a.trafo * a.fc[λ]
+function evaluate(a::approx, λ::Float64, nodeweights::Union{Vector{Float64},Nothing} = nothing)::Union{Vector{ComplexF64},Vector{Float64}}
+    nw = ones(Float64, length(a.y))
+
+    if !isnothing(nodeweights)
+        if (length(nodeweights) != length(a.y))
+            error("The length of the nodeweights Vector doesnt match the Data.")
+        else
+            nw = nodeweights
+        end
+    end
+    return nw.*(trafo * a.fc[λ])
 end
 
 @doc raw"""
@@ -307,8 +328,9 @@ This function evaluates the approximation on the nodes `X` for all regularizatio
 function evaluate(
     a::approx,
     X::Matrix{Float64},
+    nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Dict{Float64,Union{Vector{ComplexF64},Vector{Float64}}}
-    return Dict(λ => evaluate(a, X, λ) for λ in collect(keys(a.fc)))
+    return Dict(λ => evaluate(a, X, λ, nodeweights) for λ in collect(keys(a.fc)))
 end
 
 @doc raw"""
@@ -316,8 +338,8 @@ end
 
 This function evaluates the approximation on the nodes `a.X` for all regularization parameters.
 """
-function evaluate(a::approx)::Dict{Float64,Union{Vector{ComplexF64},Vector{Float64}}}
-    return Dict(λ => evaluate(a, λ) for λ in collect(keys(a.fc)))
+function evaluate(a::approx, nodeweights::Union{Vector{Float64},Nothing} = nothing)::Dict{Float64,Union{Vector{ComplexF64},Vector{Float64}}}
+    return Dict(λ => evaluate(a, λ, nodeweights) for λ in collect(keys(a.fc)))
 end
 
 @doc raw"""

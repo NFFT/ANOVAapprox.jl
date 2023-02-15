@@ -264,10 +264,10 @@ function evaluate(
     nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Union{Vector{ComplexF64},Vector{Float64}}
 
-    nw = ones(Float64, length(a.y))
+    nw = ones(Float64, size(X)[2])
 
     if !isnothing(nodeweights)
-        if (length(nodeweights) != length(a.y))
+        if (length(nodeweights) != size(X)[2])
             error("The length of the nodeweights Vector doesnt match the Data.")
         else
             nw = nodeweights

@@ -3,8 +3,8 @@
 
 This function computes the relative ``\ell_2`` error on the training nodes for regularization parameter `λ`.
 """
-function get_l2error(a::approx, λ::Float64)::Float64
-    y_eval = evaluate(a, λ)
+function get_l2error(a::approx, λ::Float64,nodeweights::Union{Vector{Float64},Nothing} = nothing,)::Float64
+    y_eval = evaluate(a, λ, nodeweights)
     return norm(y_eval - a.y) / norm(a.y)
 end
 
@@ -18,8 +18,9 @@ function get_l2error(
     X::Matrix{Float64},
     y::Union{Vector{ComplexF64},Vector{Float64}},
     λ::Float64,
+    nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Float64
-    y_eval = evaluate(a, X, λ)
+    y_eval = evaluate(a, X, λ, nodeweights)
     return norm(y_eval - y) / norm(y)
 end
 
@@ -41,8 +42,9 @@ function get_l2error(
     a::approx,
     X::Matrix{Float64},
     y::Union{Vector{ComplexF64},Vector{Float64}},
+    nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Dict{Float64,Float64}
-    return Dict(λ => get_l2error(a, X, y, λ) for λ in collect(keys(a.fc)))
+    return Dict(λ => get_l2error(a, X, y, λ, nodeweights) for λ in collect(keys(a.fc)))
 end
 
 @doc raw"""
@@ -51,18 +53,9 @@ end
 This function computes the mean square error (mse) on the training nodes for regularization parameter `λ`.
 """
 function get_mse(a::approx, λ::Float64,nodeweights::Union{Vector{Float64},Nothing} = nothing,)::Float64
-    y_eval = evaluate(a, λ)
+    y_eval = evaluate(a, λ, nodeweights)
 
-    nw = ones(Float64, length(a.y))
-    if !isnothing(nodeweights)
-        if (length(nodeweights) != length(a.y))
-            error("The length of the nodeweights Vector doesnt match the Data.")
-        else
-            nw = nodeweights
-        end
-    end
-
-    return 1 / length(a.y) * (norm(sqrt.(nw).*y_eval - sqrt.(nw).*a.y)^2)
+    return 1 / length(a.y) * (norm(y_eval - a.y)^2)
 end
 
 @doc raw"""
@@ -77,18 +70,9 @@ function get_mse(
     λ::Float64,
     nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Float64
+    y_eval = evaluate(a, X, λ, nodeweights)
 
-    nw = ones(Float64, length(y))
-    if !isnothing(nodeweights)
-        if (length(nodeweights) != length(y))
-            error("The length of the nodeweights Vector doesnt match the Data.")
-        else
-            nw = nodeweights
-        end
-    end
-
-    y_eval = evaluate(a, X, λ)
-    return 1 / length(y) * (norm(sqrt.(nw).*y_eval - sqrt.(nw).*y)^2)
+    return 1 / length(y) * (norm(y_eval - y)^2)
 end
 
 @doc raw"""
@@ -109,8 +93,9 @@ function get_mse(
     a::approx,
     X::Matrix{Float64},
     y::Union{Vector{ComplexF64},Vector{Float64}},
+    nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Dict{Float64,Float64}
-    return Dict(λ => get_mse(a, X, y, λ) for λ in collect(keys(a.fc)))
+    return Dict(λ => get_mse(a, X, y, λ, nodeweights) for λ in collect(keys(a.fc)))
 end
 
 @doc raw"""
@@ -133,8 +118,9 @@ function get_mad(
     X::Matrix{Float64},
     y::Union{Vector{ComplexF64},Vector{Float64}},
     λ::Float64,
+    nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Float64
-    y_eval = evaluate(a, X, λ)
+    y_eval = evaluate(a, X, λ, nodeweights)
     return 1 / length(y) * norm(y_eval - y, 1)
 end
 
@@ -143,8 +129,8 @@ end
 
 This function computes the mean absolute deviation (mad) on the training nodes for all regularization parameters.
 """
-function get_mad(a::approx)::Dict{Float64,Float64}
-    return Dict(λ => get_mad(a, λ) for λ in collect(keys(a.fc)))
+function get_mad(a::approx,nodeweights::Union{Vector{Float64},Nothing} = nothing,)::Dict{Float64,Float64}
+    return Dict(λ => get_mad(a, λ, nodeweights) for λ in collect(keys(a.fc)))
 end
 
 @doc raw"""
@@ -156,8 +142,9 @@ function get_mad(
     a::approx,
     X::Matrix{Float64},
     y::Union{Vector{ComplexF64},Vector{Float64}},
+    nodeweights::Union{Vector{Float64},Nothing} = nothing,
 )::Dict{Float64,Float64}
-    return Dict(λ => get_mad(a, X, y, λ) for λ in collect(keys(a.fc)))
+    return Dict(λ => get_mad(a, X, y, λ, nodeweights) for λ in collect(keys(a.fc)))
 end
 
 @doc raw"""

@@ -183,7 +183,7 @@ function approximate(
 
     if solver == "lsqr"
         diag_w_sqrt = sqrt(λ) .* sqrt.(w)
-        if a.basis == "per"
+        if (a.basis == "per" || a.basis == "expcos")
             F_vec = LinearMap{ComplexF64}(
                 fhat -> vcat(
                     nw.*(a.trafo * GroupedCoefficients(a.trafo.setting, fhat)),
@@ -317,7 +317,7 @@ function evaluate(a::approx, λ::Float64, nodeweights::Union{Vector{Float64},Not
             nw = nodeweights
         end
     end
-    return nw.*(trafo * a.fc[λ])
+    return nw.*(a.trafo * a.fc[λ])
 end
 
 @doc raw"""

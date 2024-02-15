@@ -1,7 +1,7 @@
 module ANOVAapprox
 
 using GroupedTransforms,
- LinearAlgebra, IterativeSolvers, LinearMaps, Distributed, SpecialFunctions, Optim
+ LinearAlgebra, IterativeSolvers, LinearMaps, Distributed, SpecialFunctions, Optim, Plots
 
 bases = ["per", "cos", "cheb", "std", "chui1", "chui2", "chui3", "chui4", "mixed"]
 types = Dict(
@@ -92,34 +92,94 @@ fits a function of the form
 # Output
  - `C::Vector{Float64}`: coefficients of the approximation
 """
-function fitrate(X, y::Vector{Float64}; verbose::Bool = false, )::Vector{Float64}
-    # no rate
-    length(unique(y)) == 1 && return [0.0, 0.0, -100.0, length(X)+1]
+
+function fitrate(x, y)
+    if sum(y .> 2*y[round(Int, sqrt(length(y)))]) <= 1 && length(y)>25
+        return (y[round(Int, length(x)/2)], 0)
+    end
+
+    function fitrate_wo(x, y)
+        res = optimize(
+            C -> maximum(y.*x.^(2C[1]))/minimum(y.*x.^(2C[1])),
+            [1.]
+        )
+        t = Optim.minimizer(res)[1]
+
+        D1 = minimum(y.*x.^(2t))
+        D2 = maximum(y.*x.^(2t))
+        return (D1, D2, t)
+    end
+
+    ts = zeros(Float64, length(x))
+    for idx in 1:length(x)
+        D1, D2, t = fitrate_wo(x[1:idx], y[1:idx])
+        ts[idx] = t
+    end
+
+    function find_plateau(x, y; n = 1, Δ = (maximum(y)-minimum(y))/100)
+        h = zeros(length(x))
+        idcs_prev = zeros(Int, length(x))
+        idcs_next = zeros(Int, length(x))
+
+        for idx in 1:length(ts)
+            tmp = ( abs.(ts[idx] .- ts) .> Δ/2 )
+
+            idx_prev = findprev(tmp, idx)
+            idx_prev = ( isnothing(idx_prev) ? idx : idx_prev+1 )
+
+            idx_next = findnext(tmp, idx)
+            idx_next = ( isnothing(idx_next) ? idx : idx_next-1 )
+
+            h[idx] = abs.(x[idx_prev:idx_next-1]-x[idx_prev+1:idx_next]) |> sum
+            idcs_prev[idx] = idx_prev
+            idcs_next[idx] = idx_next
+        end
+        h[h .== 0] .= -Inf
+
+        idcs = zeros(Int, n)
+        for i in 1:n
+            idcs[i] = argmax(h)
+            h[idcs_prev[idcs[i]]:idcs_next[idcs[i]]] .= -Inf
+            if all(h .== -Inf)
+                idcs = idcs[1:i]
+                break
+            end
+        end
+
+        return (idcs_prev[idcs], idcs_next[idcs])
+    end
+
+    n = 3
+    idcs_prev, idcs_next = find_plateau(log.(x), ts; n = n)
+    n = length(idcs_prev)
     
-    # delete zeros at the end
-    idx = length(y) - findfirst(reverse(y) .!= 0) + 1
-    X = X[1:idx]
-    y = y[1:idx]
 
-    function f(C::Vector)
-        return norm(log.((maximum(X)+exp(C[4]) .- X) .* (exp(C[1]) .+ exp(C[2])*X.^(C[3]))) - log.(y), 1)
+    offset = zeros(n)
+
+    for i in 1:n
+        idx_prev = idcs_prev[i]
+        idx_next = idcs_next[i]
+
+        D1, D2, t = fitrate_wo(x[1:idx_next], y[1:idx_next])
+        if idx_next > 1
+            offset[i] = sum( i -> log(x[i+1]/x[i])*(log(sqrt(D1*D2)*x[i]^(-2t)) - log(y[i]) )^2, 1:idx_next-1)/log(x[idx_next])
+        end
     end
 
-    x0 = [log(y[argmax(X)]), log((y[argmin(X)]-y[argmax(X)])*minimum(X)^3), -3.0, 1]
-    if verbose
-        @show res = optimize(f, x0)
+# compare with least squares on all data
+    w = log.(x[2:end]./x[1:end-1])
+    tmp = lsqr(diagm(sqrt.(w))*[ones(length(x)-1) log.(x[1:end-1])], sqrt.(w).*log.(y[1:end-1]))
+    D = exp(tmp[1])
+    t = tmp[2]/-2
+    offset_lsqr = sum( i -> log(x[i+1]/x[i])*(log(D*x[i]^(-2t)) .- log(y[i]) )^2, 1:length(x)-1)/log(x[end])
+
+    if 2*offset_lsqr < minimum(offset)
+        return (y[round(Int, length(x)/2)], 0)
     else
-        res = optimize(f, x0)
+        idx = idcs_next[argmin(offset)]
+        D1, D2, t = fitrate_wo(x[1:idx], y[1:idx])
+        return (sqrt(D1*D2), t)
     end
-
-    C = Optim.minimizer(res)
-    C[1] = exp.(C[1])
-    C[2] = exp.(C[2])
-    C[4] = exp(C[4])+maximum(X)
-
-    C[3] >= 0 && return [0.0, 0.0, -100.0, length(X)+1]
-
-    return C
 end
 
 function testrate(S::Vector{Vector{Float64}},C::Vector{Vector{Float64}},t::Float64)::Vector{Bool}

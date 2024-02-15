@@ -469,33 +469,72 @@ function improve_bandwidths(a::approx,
         wdh = false
         
         Une = findall(x->x!=[],U)
-        CJv = Vector{Vector{Tuple{Float64, Float64, Bool}}}(undef,length(U))
+        CJv = Vector{Vector{Tuple{Float64, Float64}}}(undef,length(U))
         CJv[Une] = approx_decay(a,λ,verbose = verbose)
-
-        J[Une] = [[J[i][j]&&CJv[i][j][3] for j = 1:lastindex(bs[i])] for i = Une]
+        
         CJmv = Vector{Vector{Tuple{Float64, Float64, Bool, Int}}}(undef,length(U))
-        CJmv[Une] = [[(CJv[i][j][1],CJv[i][j][2],J[i][j],bs[i][j]) for j = 1:lastindex(bs[i])] for i = Une]
-
-        if verbose
-            println("Rates: ", CJmv)
-        end
+        CJmv[Une] = [[(CJv[i][j][1],2*CJv[i][j][2],J[i][j],bs[i][j]) for j = 1:lastindex(bs[i])] for i = Une]
+        GSI = get_GSI(a,λ)
 
         del = fill(false,length(U))
-        del[Une] = map(x -> reduce(|,map(y -> y[1]==0,x)),CJmv[Une])
+        
+        for i=Une
+            for j=1:lastindex(CJmv[i])
+                if CJmv[i][j][2]<0.1 && CJmv[i][j][3]
+                    if GSI[findfirst(x->x==U[i],U[Une])]>0.00001
+                        J[i][j] = false
+                        CJmv[i][j] = (CJmv[i][j][1],CJmv[i][j][2],false,CJmv[i][j][4])
+                        wdh = true
+                    else
+                        del[i] = true
+                        J[i][j] = false
+                        CJmv[i][j] = (CJmv[i][j][1],CJmv[i][j][2],false,0)
+                    end
+                end
+            end
+        end
+        
+        if verbose
+            println("Rates: ", CJmv)
+            Sv = Vector{Vector{Vector{Float64}}}(undef,length(U))      
+            Sv[Une] = [get_fc_decay(a,λ,u) for u=U[Une]]
+            
+            
+            plot(axis = :log,size=(1000,1000))
+            for i=Une
+                for j=1:lastindex(Sv[i])
+                    X = 1:length(Sv[i][j])
+                    
+                    plot!(Sv[i][j], label="Koeffis "*string(U[i])*"_"*string(j))
+                    plot!(X,CJmv[i][j][1].*X.^(-CJmv[i][j][2]), label="Fit "*string(U[i])*"_"*string(j))
+                    
+                end
+            end
+            display(plot!())
+        end
+        
+
+        
         Une = findall(x->(U[x]!=[] && !del[x]),1:lastindex(U))
-        gun = λ -> sum(map(x -> prod(map(y -> y[3] ? (-y[2]*y[1]/λ)^(-1/y[2]) : y[4],x))^(1/(1-sum(map(y -> 1/y[2],x)))),CJmv[Une]))-B
+
+        gun = λ3 -> sum(map(x -> prod(map(y -> y[3] ? (y[2]*y[1]/λ3)^(1/y[2]) : y[4],x))^(1/(1+sum(map(y -> y[3] ? 1/y[2] : 0,x)))),CJmv[Une]))-B
+        
+        #display(plot(-100.0:1:100.0,gun.(exp.(-100.0:1:100.0)),ylims=(-1000,1000))) 
 
         λ2 = bisection(-100.0, 100.0, t -> gun(exp.(t))) |> exp
 
         sIv=Vector{Float64}(undef,length(U))
-        sIv[Une] = map(x -> prod(map(y -> y[3] ? (-y[2]*y[1]/λ2)^(-1/y[2]) : y[4],x))^(1/(1-sum(map(y -> 1/y[2],x)))),CJmv[Une])
+        sIv[Une] = map(x -> prod(map(y -> y[3] ? (y[2]*y[1]/λ2)^(1/y[2]) : y[4],x))^(1/(1+sum(map(y -> y[3] ? 1/y[2] : 0,x)))),CJmv[Une])
+        
+        if verbose
+            println("I: ", sIv)
+        end
+        #println("λ: ",λ2)
+        bsn[Une] = [[v[3] ? (((λ2*sIv[i])/(v[2]*v[1]))^(-1/v[2]) |> x->ceil(round(x)/2) |> x->x!=0.0 ? 2*(x+1) : 0  |> x->min(x,prevfloat(Float64(typemax(Int)))) |> Int) : v[4] for v=CJmv[i]] for i=Une]
 
         if verbose
-            println("I", sIv)
+            println("bw", bsn)
         end
-
-        
-        bsn[Une] = [[v[3] ? (((λ2*sIv[i])/(-v[2]*v[1]))^(1/v[2]) |> x->x/2+1 |> ceil |> x->2*x |> x->min(x,prevfloat(Float64(typemax(Int)))) |> Int) : v[4] for v=CJmv[i]] for i=Une]
 
         for i=Une
             M = get_fc_array(a,λ,U[i])
@@ -504,7 +543,10 @@ function improve_bandwidths(a::approx,
                 if bs[i][j] > bsn[i][j]
                     n1 = norm(M[CartesianIndices(tuple([range(1,k==j ? bs[i][j].÷2 : NN[k]) for k=1:lastindex(NN)]...))])
                     n2 = norm(M[CartesianIndices(tuple([range(1,k==j ? bsn[i][j].÷2 : NN[k]) for k=1:lastindex(NN)]...))])
-                    if n2 < 0.9*n1
+                    if verbose
+                        println(U[i]," ",n2/n1," ",GSI[findfirst(x->x==U[i],U[Une])])
+                    end
+                    if n2 < 0.9*n1 && GSI[findfirst(x->x==U[i],U[Une])]>0.00001
                         J[i][j] = false
                         wdh = true
                     end
@@ -517,6 +559,7 @@ function improve_bandwidths(a::approx,
 
     deleteat!(bs, del)
     deleteat!(U,  del)
+    deleteat!(J,  del)
     return (U,bs,J)
 end
 
@@ -528,7 +571,7 @@ This function approximates the decay rates of all ANOVA terms. The returned tupl
 function approx_decay(a::approx,
     λ::Float64;
     verbose::Bool = false, 
-)::Vector{Vector{Tuple{Float64,Float64,Bool}}}
+)::Vector{Vector{Tuple{Float64,Float64}}}
     U = a.U
     Une = findall(x->x!=[],U)
     return map(x -> approx_decay(a,λ,x,verbose = verbose), U[Une])
@@ -543,19 +586,15 @@ function approx_decay(a::approx,
     λ::Float64,
     u::Vector{Int};
     verbose::Bool = false, 
-)::Vector{Tuple{Float64,Float64,Bool}}
+)::Vector{Tuple{Float64,Float64}}
 
     if u==[]
         error("Can't find a decay for the constant term.")
     end
 
     S = get_fc_decay(a,λ,u)
-    if verbose
-        println("u: ", u)
-    end
-    C = [fitrate(1:length(v),v,verbose = verbose) for v=S]
-    T = testrate(S,C,2.0)
-    return [(C[i][2],C[i][3],T[i]) for i=1:lastindex(C)]
+    R = [fitrate(1:length(v),v) for v=S]
+    return [(R[i][1],R[i][2]) for i=1:lastindex(S)]
 end
 
 function get_fc_decay(a::approx,

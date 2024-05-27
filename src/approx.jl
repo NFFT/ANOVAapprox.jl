@@ -96,7 +96,7 @@ mutable struct approx
             end
 
             GC.gc()
-            trafo = GroupedTransform(gt_systems[basis], U, N, Xt; dcos = basis_vect)
+            trafo = GroupedTransform(gt_systems[basis], U, N, Xt; basis_vect = basis_vect)
             new(basis, X, y, U, N, trafo, Dict{Float64,GroupedCoefficients}(), basis_vect)
         else
             error("Basis not found.")

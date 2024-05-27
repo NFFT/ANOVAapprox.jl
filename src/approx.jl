@@ -296,7 +296,7 @@ function evaluate(
         Xt ./= 4
     end
 
-    trafo = GroupedTransform(gt_systems[basis], a.U, a.N, Xt; dcos = a.basis_vect)
+    trafo = GroupedTransform(gt_systems[basis], a.U, a.N, Xt; basis_vect = a.basis_vect)
     return trafo * a.fc[λ]
 end
 

@@ -92,12 +92,8 @@ fits a function of the form
 # Output
  - `C::Vector{Float64}`: coefficients of the approximation
 """
-
 function fitrate(x, y)
-    if sum(y .> 2*y[round(Int, sqrt(length(y)))]) <= 1 && length(y)>25
-        return (y[round(Int, length(x)/2)], 0)
-    end
-
+    # find the envelope of smallest diameter
     function fitrate_wo(x, y)
         res = optimize(
             C -> maximum(y.*x.^(2C[1]))/minimum(y.*x.^(2C[1])),
@@ -110,19 +106,32 @@ function fitrate(x, y)
         return (D1, D2, t)
     end
 
+    # if we only have few data points, use all of them
+    if length(x) < 7
+        D1, D2, t = fitrate_wo(x, y)
+        return (sqrt(D1*D2), t)
+    end
+
+    # a check to see if we can detect a rate
+    if sum(y .> 1.5*y[round(Int, (length(y))^(3/4))]) <= 1
+        return (y[round(Int, length(x)/2)], 0)
+    end
+
+    # compute estimated rates based on the first i data points for i=1,...,n
     ts = zeros(Float64, length(x))
     for idx in 1:length(x)
         D1, D2, t = fitrate_wo(x[1:idx], y[1:idx])
         ts[idx] = t
     end
 
+    # finds the n largest plateaus
     function find_plateau(x, y; n = 1, Δ = (maximum(y)-minimum(y))/100)
         h = zeros(length(x))
         idcs_prev = zeros(Int, length(x))
         idcs_next = zeros(Int, length(x))
 
-        for idx in 1:length(ts)
-            tmp = ( abs.(ts[idx] .- ts) .> Δ/2 )
+        for idx in 1:length(y)
+            tmp = ( abs.(y[idx] .- y) .> Δ/2 )
 
             idx_prev = findprev(tmp, idx)
             idx_prev = ( isnothing(idx_prev) ? idx : idx_prev+1 )
@@ -152,34 +161,69 @@ function fitrate(x, y)
     n = 3
     idcs_prev, idcs_next = find_plateau(log.(x), ts; n = n)
     n = length(idcs_prev)
-    
 
+    if idcs_next[1]-idcs_prev[1]<3
+        D1, D2, t = fitrate_wo(x, y)
+        return (sqrt(D1*D2), t)
+    end
+
+    # compute the error in the least squares fit
     offset = zeros(n)
-
     for i in 1:n
         idx_prev = idcs_prev[i]
         idx_next = idcs_next[i]
 
         D1, D2, t = fitrate_wo(x[1:idx_next], y[1:idx_next])
-        if idx_next > 1
-            offset[i] = sum( i -> log(x[i+1]/x[i])*(log(sqrt(D1*D2)*x[i]^(-2t)) - log(y[i]) )^2, 1:idx_next-1)/log(x[idx_next])
-        end
+        offset[i] = sum( i -> log(x[i+1]/x[i])*(log(sqrt(D1*D2)*x[i]^(-2t)) - log(y[i]) )^2, 1:idx_next-1)/log(x[idx_next])
+
+# debugging
+        #=if debugging
+            @show offset[i]
+
+            p1 = plot(xaxis = :log, legend = false)
+            plot!(x, ts, color = :black)
+            plot!(x[idx_prev:idx_next], ts[idx_prev:idx_next], color = :orange, linewidth = 5)
+
+            p2 = plot(axis = :log, legend = false, ylim = (.1*minimum(y), 10*maximum(y)))
+            scatter!(x, y, color = :black)
+            scatter!(x[1:idx_next], y[1:idx_next], color = :orange)
+            plot!(x, sqrt(D1*D2)*x.^(-2t))
+
+            plot(p1, p2, size = (1500, 800)) |> display
+            readline()
+        end=#
+# end debugging
     end
 
-# compare with least squares on all data
-    w = log.(x[2:end]./x[1:end-1])
-    tmp = lsqr(diagm(sqrt.(w))*[ones(length(x)-1) log.(x[1:end-1])], sqrt.(w).*log.(y[1:end-1]))
-    D = exp(tmp[1])
-    t = tmp[2]/-2
-    offset_lsqr = sum( i -> log(x[i+1]/x[i])*(log(D*x[i]^(-2t)) .- log(y[i]) )^2, 1:length(x)-1)/log(x[end])
+    ## compare with least squares on all data
+    #    w = log.(x[2:end]./x[1:end-1])
+    #    tmp = lsqr(diagm(sqrt.(w))*[ones(length(x)-1) log.(x[1:end-1])], sqrt.(w).*log.(y[1:end-1]))
+    #    D = exp(tmp[1])
+    #    t = tmp[2]/-2
+    #    offset_lsqr = sum( i -> log(x[i+1]/x[i])*(log(D*x[i]^(-2t)) .- log(y[i]) )^2, 1:length(x)-1)/log(x[end])
+    #    
+    #    # debugging
+    #    if debugging
+    #    @show offset_lsqr
+    #    p2 = plot(axis = :log, legend = false, ylim = (.1*minimum(y), 10*maximum(y)))
+    #    scatter!(x, y, color = :black)
+    #    plot!(x, D*x.^(-2t))
+    #
+    #    plot(p2, size = (1500, 800)) |> display
+    #    readline()
+    #    end
+    #    # end debugging
+    #
+    #
+    #    @show offset_lsqr
+    #    @show minimum(offset)
+    #    if 2*offset_lsqr < minimum(offset)
+    #        return (y[round(Int, length(x)/2)], 0)
+    #    else
 
-    if 2*offset_lsqr < minimum(offset)
-        return (y[round(Int, length(x)/2)], 0)
-    else
-        idx = idcs_next[argmin(offset)]
-        D1, D2, t = fitrate_wo(x[1:idx], y[1:idx])
-        return (sqrt(D1*D2), t)
-    end
+    idx = idcs_next[argmin(offset)]
+    D1, D2, t = fitrate_wo(x[1:idx], y[1:idx])
+    return (sqrt(D1*D2), t)
 end
 
 function testrate(S::Vector{Vector{Float64}},C::Vector{Vector{Float64}},t::Float64)::Vector{Bool}

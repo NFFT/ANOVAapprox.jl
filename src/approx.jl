@@ -96,7 +96,7 @@ mutable struct approx
             end
 
             GC.gc()
-            trafo = GroupedTransform(gt_systems[basis], U, N, Xt, basis_vect)
+            trafo = GroupedTransform(gt_systems[basis], U, N, Xt; dcos = basis_vect)
             new(basis, X, y, U, N, trafo, Dict{Float64,GroupedCoefficients}(), basis_vect)
         else
             error("Basis not found.")
@@ -296,7 +296,7 @@ function evaluate(
         Xt ./= 4
     end
 
-    trafo = GroupedTransform(gt_systems[basis], a.U, a.N, Xt, a.basis_vect)
+    trafo = GroupedTransform(gt_systems[basis], a.U, a.N, Xt; dcos = a.basis_vect)
     return trafo * a.fc[λ]
 end
 
@@ -457,102 +457,54 @@ function improve_bandwidths(a::approx,
     λ::Float64,
     B::Int,
     J::Vector{Vector{Bool}};
+    optim::Bool = true,
     verbose::Bool = false,
-)::Tuple{Vector{Vector{Int}},Vector{Vector{Int}},Vector{Vector{Bool}}}
+)::Tuple{Vector{Vector{Int}},Vector{Vector{Int}},Vector{Vector{Bool}},Int}
     wdh = true
     bs = copy(a.N)
     U = copy(a.U)
     bsn = Vector{Vector{Int}}(undef,length(U))
     Une = findall(x->x!=[],U)
     del = fill(false,length(U))
+
+    function test_bs(a::approx,λ::Float64,bs::Vector{Vector{Int}})::Float64
+        a2 = approx(a.X,a.y,a.U,bs,a.basis)
+        approximate(a2,λ)
+        err1 = get_FCVerror(a2,λ)
+        #err2 = get_L2error( a2, norm, fc ,λ)
+        println(length(a2.fc[λ].data))
+        println(err1)
+        return exp(err1)
+    end
     while wdh
-        wdh = false
-        
-        Une = findall(x->x!=[],U)
-        CJv = Vector{Vector{Tuple{Float64, Float64}}}(undef,length(U))
-        CJv[Une] = approx_decay(a,λ,verbose = verbose)
-        
-        CJmv = Vector{Vector{Tuple{Float64, Float64, Bool, Int}}}(undef,length(U))
-        CJmv[Une] = [[(CJv[i][j][1],2*CJv[i][j][2],J[i][j],bs[i][j]) for j = 1:lastindex(bs[i])] for i = Une]
-        GSI = get_GSI(a,λ)
-
-        del = fill(false,length(U))
-        
-        for i=Une
-            for j=1:lastindex(CJmv[i])
-                if CJmv[i][j][2]<0.1 && CJmv[i][j][3]
-                    if GSI[findfirst(x->x==U[i],U[Une])]>0.00001
-                        J[i][j] = false
-                        CJmv[i][j] = (CJmv[i][j][1],CJmv[i][j][2],false,CJmv[i][j][4])
-                        wdh = true
-                    else
-                        del[i] = true
-                        J[i][j] = false
-                        CJmv[i][j] = (CJmv[i][j][1],CJmv[i][j][2],false,0)
-                    end
-                end
-            end
-        end
-        
-        if verbose
-            println("Rates: ", CJmv)
-            Sv = Vector{Vector{Vector{Float64}}}(undef,length(U))      
-            Sv[Une] = [get_fc_decay(a,λ,u) for u=U[Une]]
-            
-            
-            plot(axis = :log,size=(1000,1000))
-            for i=Une
-                for j=1:lastindex(Sv[i])
-                    X = 1:length(Sv[i][j])
-                    
-                    plot!(Sv[i][j], label="Koeffis "*string(U[i])*"_"*string(j))
-                    plot!(X,CJmv[i][j][1].*X.^(-CJmv[i][j][2]), label="Fit "*string(U[i])*"_"*string(j))
-                    
-                end
-            end
-            display(plot!())
-        end
-        
-
-        
+        (CJmv,del,wdh) = get_CJmv(a,λ,J,del;verbose=verbose)
         Une = findall(x->(U[x]!=[] && !del[x]),1:lastindex(U))
+        if optim
+            res = optimize(
+                C -> test_bs(a,λ,update_bws(round.(Int,C),U,CJmv,Une;verbose=verbose)),
+                1,length(a.y),GoldenSection()
+            )
+            B = round(Int,Optim.minimizer(res)[1])
+            println("B",B)
+            
+            #B=B2
+            #E1=Vector{Float64}()
+            #E2=Vector{Float64}()
+            #@show round(Int,0.5*B)
+            #@show round(Int,1.5*B)
+            #for i=round(Int,0.5*B):100:round(Int,1.5*B)
+            #    (err1,err2) = test_bs(a,λ,norm,fc,update_bws(i,U,CJmv,Une;verbose=verbose))
+            #    push!(E1,err1)
+            #    push!(E2,err2)
+            #    @show i
+            #end
+            #@show E1
+            #@show E2
+        end
+        bsn = update_bws(B,U,CJmv,Une;verbose=verbose)
 
-        gun = λ3 -> sum(map(x -> prod(map(y -> y[3] ? (y[2]*y[1]/λ3)^(1/y[2]) : y[4],x))^(1/(1+sum(map(y -> y[3] ? 1/y[2] : 0,x)))),CJmv[Une]))-B
+        (J,wdh) = test_bws(a,λ,bs,bsn,J,wdh,Une;verbose = verbose)
         
-        #display(plot(-100.0:1:100.0,gun.(exp.(-100.0:1:100.0)),ylims=(-1000,1000))) 
-
-        λ2 = bisection(-100.0, 100.0, t -> gun(exp.(t))) |> exp
-
-        sIv=Vector{Float64}(undef,length(U))
-        sIv[Une] = map(x -> prod(map(y -> y[3] ? (y[2]*y[1]/λ2)^(1/y[2]) : y[4],x))^(1/(1+sum(map(y -> y[3] ? 1/y[2] : 0,x)))),CJmv[Une])
-        
-        if verbose
-            println("I: ", sIv)
-        end
-        #println("λ: ",λ2)
-        bsn[Une] = [[v[3] ? (((λ2*sIv[i])/(v[2]*v[1]))^(-1/v[2]) |> x->ceil(round(x)/2) |> x->x!=0.0 ? 2*(x+1) : 0  |> x->min(x,prevfloat(Float64(typemax(Int)))) |> Int) : v[4] for v=CJmv[i]] for i=Une]
-
-        if verbose
-            println("bw", bsn)
-        end
-
-        for i=Une
-            M = get_fc_array(a,λ,U[i])
-            NN = size(M).÷2
-            for j=1:lastindex(bsn[i])
-                if bs[i][j] > bsn[i][j]
-                    n1 = norm(M[CartesianIndices(tuple([range(1,k==j ? bs[i][j].÷2 : NN[k]) for k=1:lastindex(NN)]...))])
-                    n2 = norm(M[CartesianIndices(tuple([range(1,k==j ? bsn[i][j].÷2 : NN[k]) for k=1:lastindex(NN)]...))])
-                    if verbose
-                        println(U[i]," ",n2/n1," ",GSI[findfirst(x->x==U[i],U[Une])])
-                    end
-                    if n2 < 0.9*n1 && GSI[findfirst(x->x==U[i],U[Une])]>0.00001
-                        J[i][j] = false
-                        wdh = true
-                    end
-                end
-            end
-        end
     end
     bs[Une] = bsn[Une]
     del[Une] = del[Une] .| map(x -> reduce(|,map(y -> y==0,x)),bs[Une])
@@ -560,7 +512,102 @@ function improve_bandwidths(a::approx,
     deleteat!(bs, del)
     deleteat!(U,  del)
     deleteat!(J,  del)
-    return (U,bs,J)
+    return (U,bs,J,B)
+end
+
+function test_bws(a::approx,λ::Float64,bs::Vector{Vector{Int}},bsn::Vector{Vector{Int}},J::Vector{Vector{Bool}},wdh::Bool,Une::Vector{Int};verbose::Bool = false,)::Tuple{Vector{Vector{Bool}},Bool}
+    U = copy(a.U)
+    GSI = get_GSI(a,λ)
+    for i=Une
+        M = get_fc_array(a,λ,U[i])
+        NN = size(M).÷2
+        for j=1:lastindex(bsn[i])
+            if bs[i][j] > bsn[i][j]
+                n1 = norm(M[CartesianIndices(tuple([range(1,k==j ? bs[i][j].÷2 : NN[k]) for k=1:lastindex(NN)]...))])
+                n2 = norm(M[CartesianIndices(tuple([range(1,k==j ? bsn[i][j].÷2 : NN[k]) for k=1:lastindex(NN)]...))])
+                if verbose
+                    println(U[i]," ",n2/n1," ",GSI[findfirst(x->x==U[i],U[Une])])
+                end
+                if n2 < 0.9*n1 && GSI[findfirst(x->x==U[i],U[Une])]>0.00001
+                    J[i][j] = false
+                    wdh = true
+                end
+            end
+        end
+    end
+    return (J,wdh)
+end
+
+function get_CJmv(a::approx,λ::Float64,J::Vector{Vector{Bool}},del::Vector{Bool};verbose::Bool = false,)::Tuple{Vector{Vector{Tuple{Float64, Float64, Bool, Int}}},Vector{Bool},Bool}
+    wdh = false
+    bs = copy(a.N)
+    U = copy(a.U)
+    Une = findall(x->x!=[],U)
+    CJv = Vector{Vector{Tuple{Float64, Float64}}}(undef,length(U))
+    CJv[Une] = approx_decay(a,λ,verbose = verbose)
+
+    CJmv = Vector{Vector{Tuple{Float64, Float64, Bool, Int}}}(undef,length(U))
+    CJmv[Une] = [[(CJv[i][j][1],2*CJv[i][j][2],J[i][j],bs[i][j]) for j = 1:lastindex(bs[i])] for i = Une]
+    GSI = get_GSI(a,λ)
+    
+    for i=Une
+        for j=1:lastindex(CJmv[i])
+            if CJmv[i][j][2]<0.1 && CJmv[i][j][3]
+                if GSI[findfirst(x->x==U[i],U[Une])]>0.00001
+                    J[i][j] = false
+                    CJmv[i][j] = (CJmv[i][j][1],CJmv[i][j][2],false,CJmv[i][j][4])
+                    wdh = true
+                else
+                    del[i] = true
+                    J[i][j] = false
+                    CJmv[i][j] = (CJmv[i][j][1],CJmv[i][j][2],false,0)
+                end
+            end
+        end
+    end
+
+    if verbose
+        println("Rates: ", CJmv)
+        Sv = Vector{Vector{Vector{Float64}}}(undef,length(U))      
+        Sv[Une] = [get_fc_decay(a,λ,u) for u=U[Une]]
+        
+        for i=Une
+            for j=1:lastindex(Sv[i])
+                X = 1:length(Sv[i][j])
+                m = minimum(Sv[i][j][Sv[i][j].>0.0])
+                plot(axis = :log,size=(1000,1000))
+                plot!(max.(Sv[i][j],m), label="Koeffis "*string(U[i])*"_"*string(j))
+                if CJmv[i][j][1]>0
+                    plot!(X,CJmv[i][j][1].*X.^(-CJmv[i][j][2]), label="Fit "*string(U[i])*"_"*string(j))
+                end
+                display(plot!())
+            end
+        end
+        
+    end
+
+    return (CJmv,del,wdh)
+end
+
+function update_bws(B::Int,U::Vector{Vector{Int}},CJmv::Vector{Vector{Tuple{Float64, Float64, Bool, Int}}},Une::Vector{Int};verbose::Bool = false,)::Vector{Vector{Int}}
+
+    gun = λ3 -> sum(map(x -> prod(map(y -> y[3] ? (y[2]*y[1]/λ3)^(1/y[2]) : y[4],x))^(1/(1+sum(map(y -> y[3] ? 1/y[2] : 0,x)))),CJmv[Une]))-B
+    #display(plot(-100:200,gun.(exp.(-100:200)),ylims=(-1,80000000)))
+
+    λ2 = bisection(-100.0, 100.0, t -> gun(exp.(t))) |> exp
+
+    sIv=Vector{Float64}(undef,length(U))
+    sIv[Une] = map(x -> prod(map(y -> y[3] ? (y[2]*y[1]/λ2)^(1/y[2]) : y[4],x))^(1/(1+sum(map(y -> y[3] ? 1/y[2] : 0,x)))),CJmv[Une])
+
+    bsn = Vector{Vector{Int}}(undef,length(U))
+    bsn[Une] = [[v[3] ? (((λ2*sIv[i])/(v[2]*v[1]))^(-1/v[2]) |> x->ceil(round(x)/2) |> x->x!=0.0 ? 2*x : 0  |> x->min(x,prevfloat(Float64(typemax(Int)))) |> Int) : v[4] for v=CJmv[i]] for i=Une]
+
+    if verbose
+        println("I: ", sIv)
+        println("bw", bsn)
+    end
+
+    return bsn
 end
 
 @doc raw"""
@@ -630,8 +677,8 @@ function get_fc_array(a::approx,
     N = bs[idx].-1
     N = tuple(N...)
     bas = basis_vect[U[idx]]
-    fc = zeros(tuple((i+1 for i=N)...))
+    fc = zeros(tuple((bas[i]== "exp" ? N[i]+1 : N[i] for i=1:length(U[idx]))...))
     fc[CartesianIndices(tuple((1:i for i=N)...))] = abs.(permutedims(reshape(a.fc[λ][U[idx]],reverse(N)),length(U[idx]):-1:1)).^2
-    r = [bas[i]== "exp" ? [((N[i]+1)÷2):-1:1,(N[i]+1)÷2+1:N[i]+1] : [1:N[i]+1] for i=1:lastindex(N)]
+    r = [bas[i]== "exp" ? [((N[i]+1)÷2):-1:1,(N[i]+1)÷2+1:N[i]+1] : [1:N[i]] for i=1:lastindex(N)]
     return sum(map(x->fc[CartesianIndices(tuple((r[i][x[i]] for i=1:lastindex(N))...))],getproperty.(CartesianIndex.(findall(x->x==0,zeros((bas[i]== "exp" ? 2 : 1 for i=1:length(U[idx]))...))),:I)))
 end

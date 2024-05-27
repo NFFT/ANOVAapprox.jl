@@ -167,3 +167,22 @@ This function computes the relative ``L_2`` error of the function given the norm
 function get_L2error(a::approx, norm::Float64, bc_fun::Function)::Dict{Float64,Float64}
     return Dict(λ => get_L2error(a, norm, bc_fun, λ) for λ in collect(keys(a.fc)))
 end
+
+@doc raw"""
+    get_FCVerror( a::approx)::Dict{Float64,Float64}
+
+This function computes fast cross validation score of the function.
+"""
+function get_FCVerror(a::approx, λ::Float64)::Float64
+    y_eval = evaluate(a, λ)
+    return sum((abs.(y_eval .- a.y) ./ (1-length(a.fc[λ].data)/length(a.y))).^2)/length(a.y)
+end
+
+@doc raw"""
+    get_FCVerror( a::approx)::Dict{Float64,Float64}
+
+This function computes fast cross validation score of the function.
+"""
+function get_FCVerror(a::approx)::Dict{Float64,Float64}
+    return Dict(λ => get_FCVerror(a, λ) for λ in collect(keys(a.fc)))
+end

@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.0"
+julia_version = "1.10.3"
 manifest_format = "2.0"
 project_hash = "7cb4e62040048500269f31d675c306a979fcebeb"
 
@@ -150,7 +150,7 @@ weakdeps = ["Dates", "LinearAlgebra"]
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.5+1"
+version = "1.1.1+0"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
@@ -397,7 +397,9 @@ version = "1.0.2"
 
 [[deps.GroupedTransforms]]
 deps = ["Aqua", "Combinatorics", "Distributed", "LinearAlgebra", "LinearMaps", "NFFT3", "SparseArrays", "Test", "ToeplitzMatrices"]
-git-tree-sha1 = "b058e1a6dd53f1de7dcae68e0b3c93a2252c1f4f"
+git-tree-sha1 = "fcd269a2ccc6118cd98e77b125e3f9689292bc48"
+repo-rev = "NFFCT"
+repo-url = "https://github.com/NFFT/GroupedTransforms.jl.git"
 uuid = "76248ec8-aa36-4347-850f-ece2d673bc9f"
 version = "1.1.5"
 
@@ -707,7 +709,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.23+2"
+version = "0.3.23+4"
 
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]

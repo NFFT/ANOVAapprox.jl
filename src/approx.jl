@@ -472,8 +472,8 @@ function improve_bandwidths(a::approx,
         approximate(a2,λ)
         err1 = get_FCVerror(a2,λ)
         #err2 = get_L2error( a2, norm, fc ,λ)
-        println(length(a2.fc[λ].data))
-        println(err1)
+        #println(length(a2.fc[λ].data))
+        #println(err1)
         return exp(err1)
     end
     while wdh
@@ -485,7 +485,7 @@ function improve_bandwidths(a::approx,
                 1,length(a.y),GoldenSection()
             )
             B = round(Int,Optim.minimizer(res)[1])
-            println("B",B)
+            #println("B",B)
             
             #B=B2
             #E1=Vector{Float64}()

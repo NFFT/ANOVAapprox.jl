@@ -2,7 +2,7 @@
 
 julia_version = "1.10.3"
 manifest_format = "2.0"
-project_hash = "483cf46735198e970cdccd9f118fd62166b319de"
+project_hash = "0eea78cd3a414484b37445e1f1d2ecf6e8c5ea35"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -244,6 +244,12 @@ version = "1.5.5"
 git-tree-sha1 = "439e35b0b36e2e5881738abc8857bd92ad6ff9a8"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.3"
+
+[[deps.CpuId]]
+deps = ["Markdown"]
+git-tree-sha1 = "fcbb72b032692610bfbdb15018ac16a36cf2e406"
+uuid = "adafc99b-e345-5852-983c-f28acb93d879"
+version = "0.3.1"
 
 [[deps.DSP]]
 deps = ["Compat", "FFTW", "IterTools", "LinearAlgebra", "Polynomials", "Random", "Reexport", "SpecialFunctions", "Statistics"]
@@ -491,7 +497,7 @@ version = "1.0.2"
 
 [[deps.GroupedTransforms]]
 deps = ["Aqua", "Combinatorics", "Distributed", "Folds", "LinearAlgebra", "LinearMaps", "NFFT3", "SparseArrays", "Test", "ThreadsX", "ToeplitzMatrices"]
-git-tree-sha1 = "aa651f4159fcc805e253e14224dd8edf22945173"
+git-tree-sha1 = "b485fcf8c7a60d81350bd996f0fb2a06a8adbdd3"
 repo-rev = "matrixmult"
 repo-url = "https://github.com/NFFT/GroupedTransforms.jl.git"
 uuid = "76248ec8-aa36-4347-850f-ece2d673bc9f"
@@ -800,9 +806,12 @@ uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2023.1.10"
 
 [[deps.NFFT3]]
-git-tree-sha1 = "b5d764c79f3453bf03ac364a8d8d29e3a305c17d"
+deps = ["Aqua", "CpuId", "LinearAlgebra", "Test"]
+git-tree-sha1 = "f55d45d0ee67f0a3e60394df7a77b45ebf22d56f"
+repo-rev = "NFFCT"
+repo-url = "https://github.com/NFFT/NFFT3.jl.git"
 uuid = "53104703-03e8-40a5-ab01-812303a44cae"
-version = "1.1.0"
+version = "1.2.0"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]

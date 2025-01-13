@@ -421,7 +421,7 @@ function evaluateANOVAterms(
     else
         values = zeros(Float64, size(Xt)[2], length(a.U))
     end
-    trafo = GroupedTransform(gt_systems[basis], a.U, a.N, Xt, a.basis_vect)
+    trafo = GroupedTransform(gt_systems[basis], a.U, a.N, Xt; basis_vect = a.basis_vect)
 
     for j = 1:length(a.U)
         u = a.U[j]

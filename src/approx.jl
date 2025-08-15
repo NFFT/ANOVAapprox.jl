@@ -1,3 +1,23 @@
+mutable struct GroupedCoefficientsExport
+    setting::Vector{
+        NamedTuple{
+            (:u, :bandwidths),
+            Tuple{Vector{Int},Vector{Int}},
+        },
+    }
+    data::Vector{ComplexF64}
+end
+
+mutable struct approxExport
+    basis::String
+    X::Matrix{Float64}
+    y::Union{Vector{ComplexF64},Vector{Float64}}
+    fc::Dict{Float64,GroupedCoefficientsExport}
+    classification::Bool
+    basis_vect::Vector{String}
+    fastmult::Bool
+end
+
 @doc raw"""
     approx
 
@@ -118,12 +138,45 @@ mutable struct approx
                 Dict{Float64,GroupedCoefficients}(),
                 classification,
                 basis_vect,
+                fastmult,
             )
             #f(t) = println("Finalizing ANOVA")
             #finalizer(f, x)
         else
             error("Basis not found.")
         end
+    end
+    function approx(a::approxExport,)
+        basis = a.basis
+        X = a.X
+        y = a.y
+        U = [el.u for el in first(a.fc).second.setting]
+        N = [el.bandwidths for el in first(a.fc).second.setting]
+        classification = a.classification
+        basis_vect = a.basis_vect
+        fastmult = a.fastmult
+        fc = Dict(λ => GroupedCoefficients(GroupedTransforms.get_setting(gt_systems[basis],U,N,basis_vect), a.fc[λ].data) for λ in collect(keys(a.fc)))     
+        GC.gc()
+        trafo = GroupedTransform(
+            gt_systems[basis],
+            U,
+            N,
+            X;
+            fastmult = fastmult,
+            basis_vect = basis_vect,
+        )
+        new(
+            basis,
+            X,
+            y,
+            U,
+            N,
+            trafo,
+            fc,
+            classification,
+            basis_vect,
+            fastmult,
+        )
     end
 end
 
@@ -497,3 +550,16 @@ function evaluateSHAPterms(
 )::Dict{Float64,Union{Matrix{ComplexF64},Matrix{Float64}}}
     return Dict(λ => evaluateSHAPterms(a, X, λ) for λ in collect(keys(a.fc)))
 end
+
+function exportApproximation(a::approx)::approxExport
+    gce = Dict(
+        λ => GroupedCoefficientsExport(
+            [
+                (u = el.u, bandwidths = el.bandwidths) for
+                el in a.fc[λ].setting
+            ],
+            a.fc[λ].data) for 
+        λ in collect(keys(a.fc)))
+    return approxExport(a.basis, a.X, a.y, gce, a.classification, a.basis_vect, a.fastmult)
+end
+

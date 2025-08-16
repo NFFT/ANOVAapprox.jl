@@ -5,7 +5,7 @@ mutable struct GroupedCoefficientsExport
             Tuple{Vector{Int},Vector{Int}},
         },
     }
-    data::Vector{ComplexF64}
+    data
 end
 
 mutable struct approxExport
@@ -563,3 +563,6 @@ function exportApproximation(a::approx)::approxExport
     return approxExport(a.basis, a.X, a.y, gce, a.classification, a.basis_vect, a.fastmult)
 end
 
+function importFC(a::approx, λ::Float64, fc)
+    a.fc[λ] = GroupedCoefficients(copy(first(a.fc).second.setting), fc)
+end

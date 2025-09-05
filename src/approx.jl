@@ -564,5 +564,6 @@ function exportApproximation(a::approx)::approxExport
 end
 
 function importFC(a::approx, λ::Float64, fc)
-    a.fc[λ] = GroupedCoefficients(copy(first(a.fc).second.setting), fc)
+    
+    a.fc[λ] = GroupedCoefficients(GroupedTransforms.get_setting(gt_systems[a.basis],a.U,a.N,a.basis_vect,), fc)
 end

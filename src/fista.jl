@@ -210,8 +210,8 @@ function fista!(
 
             # Q
             if classification
-                Q = ( 
-                    (1 / length(y)) * sum(loss2_function.(y .* (F * hhat))) + 
+                Q = (
+                    (1 / length(y)) * sum(loss2_function.(y .* (F * hhat))) +
                     dot(vec(ghat - hhat), vec(fgrad)) +
                     L / 2 * norm(vec(ghat - hhat))^2 +
                     λ * sum(abs.(vec(ghat)))
